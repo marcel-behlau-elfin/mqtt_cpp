@@ -27,6 +27,7 @@
 #include <mqtt/utility.hpp>
 #include <mqtt/exception.hpp>
 #include <mqtt/utf8encoded_strings.hpp>
+#include <mqtt/property.hpp>
 
 namespace mqtt {
 
