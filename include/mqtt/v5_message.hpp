@@ -4,13 +4,14 @@
 // (See accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
 
-#if !defined(MQTT_MESSAGE_HPP)
-#define MQTT_MESSAGE_HPP
+#if !defined(MQTT_V5_MESSAGE_HPP)
+#define MQTT_V5_MESSAGE_HPP
 
 #include <string>
 #include <vector>
 #include <memory>
 #include <algorithm>
+#include <numeric>
 
 #include <boost/asio/buffer.hpp>
 #include <boost/optional.hpp>
@@ -28,12 +29,16 @@
 #include <mqtt/exception.hpp>
 #include <mqtt/utf8encoded_strings.hpp>
 #include <mqtt/string_check.hpp>
+#include <mqtt/property.hpp>
+#include <mqtt/property_variant.hpp>
 
 namespace mqtt {
 
 namespace as = boost::asio;
 
-inline namespace v3_1_1 {
+namespace v5 {
+
+using properties = std::vector<property_variant>;
 
 namespace detail {
 
@@ -130,10 +135,150 @@ private:
 
 } // namespace detail
 
-struct puback_message : detail::header_packet_id_message {
-    puback_message(std::uint16_t packet_id)
-        : detail::header_packet_id_message(control_packet_type::puback, 0b0000, packet_id)
-    {}
+struct puback_message {
+    puback_message(std::uint16_t packet_id, std::uint8_t reason_code, properties ps)
+        : fixed_header_(make_fixed_header(control_packet_type::puback, 0b0000)),
+          packet_id_ { MQTT_16BITNUM_TO_BYTE_SEQ(packet_id) },
+          reason_code_(reason_code),
+          property_length_(
+              std::accumulate(
+                  ps.begin(),
+                  ps.end(),
+                  0,
+                  [](std::size_t total, property_variant const& pv) {
+                      total += v5::size(pv);
+                  }
+              )
+          ),
+          properties_(std::move(ps))
+    {
+        auto pb = variable_bytes(property_length_);
+        for (auto e : pb) {
+            property_length_buf_.push_back(e);
+        }
+
+        remaining_length_ =
+            2 +                   // packet id
+            1 +                   // reason code
+            property_length_;
+
+        auto rb = remaining_bytes(remaining_length_);
+        for (auto e : rb) {
+            remaining_length_buf_.push_back(e);
+        }
+    }
+
+    template <typename Iterator>
+    puback_message(Iterator b, Iterator e) {
+        if (b >= e) throw remaining_length_error();
+        fixed_header_ = *b;
+        auto qos = publish::get_qos(fixed_header_);
+        ++b;
+
+        if (b + 4 >= e) throw remaining_length_error();
+        auto len_consumed = remaining_length(b, b + 4);
+        remaining_length_ = std::get<0>(len_consumed);
+        auto consumed = std::get<1>(len_consumed);
+
+        std::copy(b, b + consumed, std::back_inserter(remaining_length_buf_));
+        b += consumed;
+
+        if (b + 2 >= e) throw remaining_length_error();
+        std::copy(b, b + 2, std::back_inserter(topic_name_length_buf_));
+        auto topic_name_length = make_uint16_t(b, b + 2);
+        b += 2;
+
+        if (b + topic_name_length >= e) throw remaining_length_error();
+        utf8string_check(string_view(&*b, topic_name_length));
+        topic_name_ = as::buffer(&*b, topic_name_length);
+        b += topic_name_length;
+
+        switch (qos) {
+        case qos::at_most_once:
+            break;
+        case qos::at_least_once:
+        case qos::exactly_once:
+            if (b + 2 >= e) throw remaining_length_error();
+            std::copy(b, b + 2, std::back_inserter(packet_id_));
+            b += 2;
+            break;
+        default:
+            throw protocol_error();
+            break;
+        };
+
+        payload_ = as::buffer(&*b, std::distance(b, e));
+    }
+
+    /**
+     * @brief Create const buffer sequence
+     *        it is for boost asio APIs
+     * @return const buffer sequence
+     */
+    std::vector<as::const_buffer> const_buffer_sequence() const {
+        if (packet_id_.empty()) {
+            return
+                {
+                    as::buffer(&fixed_header_, 1),
+                    as::buffer(remaining_length_buf_.data(), remaining_length_buf_.size()),
+                    as::buffer(topic_name_length_buf_.data(), topic_name_length_buf_.size()),
+                    topic_name_,
+                    payload_
+                };
+        }
+        else {
+            return
+                {
+                    as::buffer(&fixed_header_, 1),
+                    as::buffer(remaining_length_buf_.data(), remaining_length_buf_.size()),
+                    as::buffer(topic_name_length_buf_.data(), topic_name_length_buf_.size()),
+                    topic_name_,
+                    as::buffer(packet_id_.data(), packet_id_.size()),
+                    payload_
+                };
+        }
+    }
+
+    /**
+     * @brief Get whole size of sequence
+     * @return whole size
+     */
+    std::size_t size() const {
+        return 1 + remaining_length_buf_.size() + remaining_length_;
+    }
+
+    /**
+     * @brief Create one continuours buffer.
+     *        All sequence of buffers are concatinated.
+     *        It is useful to store to file/database.
+     * @return continuous buffer
+     */
+    std::string continuous_buffer() const {
+        std::string ret;
+
+        ret.reserve(size());
+
+        ret.push_back(fixed_header_);
+        ret.append(remaining_length_buf_.data(), remaining_length_buf_.size());
+
+        ret.append(topic_name_length_buf_.data(), topic_name_length_buf_.size());
+        ret.append(get_pointer(topic_name_), get_size(topic_name_));
+
+        ret.append(packet_id_.data(), packet_id_.size());
+        ret.append(get_pointer(payload_), get_size(payload_));
+
+        return ret;
+    }
+
+
+    char fixed_header_;
+    std::size_t remaining_length_;
+    boost::container::static_vector<char, 4> remaining_length_buf_;
+    boost::container::static_vector<char, 2> packet_id_;
+    std::uint8_t reason_code_;
+    std::size_t property_length_;
+    boost::container::static_vector<char, 4> property_length_buf_;
+    properties properties_;
 };
 
 struct pubrec_message : detail::header_packet_id_message {
@@ -938,8 +1083,8 @@ private:
     boost::container::static_vector<char, 4> remaining_length_buf_;
 };
 
-} // inline namespace v3_1_1
+} // namespace v5
 
 } // namespace mqtt
 
-#endif // MQTT_MESSAGE_HPP
+#endif // MQTT_V5_MESSAGE_HPP

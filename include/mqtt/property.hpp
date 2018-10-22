@@ -25,6 +25,7 @@
 #include <mqtt/connect_flags.hpp>
 #include <mqtt/publish.hpp>
 #include <mqtt/exception.hpp>
+#include <mqtt/string_check.hpp>
 
 namespace mqtt {
 
@@ -138,10 +139,21 @@ public:
 
 class user_property {
     struct len_str {
+        explicit len_str(string_view v)
+            : len{MQTT_16BITNUM_TO_BYTE_SEQ(v.size())}
+            , str(as::buffer(v.data(), v.size()))
+        {}
+        explicit len_str(as::const_buffer v)
+            : len{MQTT_16BITNUM_TO_BYTE_SEQ(get_size(v))}
+            , str(v)
+        {}
         boost::container::static_vector<char, 2> len;
         as::const_buffer str;
     };
     struct entry {
+        explicit entry(len_str&& k, len_str&& v)
+            : key(std::move(k)), val(std::move(v))
+        {}
         len_str key;
         len_str val;
     };
@@ -163,10 +175,10 @@ public:
         ret.emplace_back(as::buffer(&id_, 1));
 
         for (auto const& e : entries_) {
-            ret.emplace_back(as::buffer(e.first.len.data(), e.first.len.size()));
-            ret.emplace_back(e.first.str);
-            ret.emplace_back(as::buffer(e.second.len.data(), e.second.len.size()));
-            ret.emplace_back(e.second.str);
+            ret.emplace_back(as::buffer(e.key.len.data(), e.key.len.size()));
+            ret.emplace_back(e.key.str);
+            ret.emplace_back(as::buffer(e.val.len.data(), e.val.len.size()));
+            ret.emplace_back(e.val.str);
         }
 
         return ret;
@@ -179,18 +191,18 @@ public:
         *b++ = id_;
         for (auto const& e : entries_) {
             {
-                std::copy(e.first.len.begin(), e.first.len.end(), b);
-                b += e.first.len.size();
-                auto ptr = get_pointer(e.first.str);
-                auto size = get_size(e.first.str);
+                std::copy(e.key.len.begin(), e.key.len.end(), b);
+                b += e.key.len.size();
+                auto ptr = get_pointer(e.key.str);
+                auto size = get_size(e.key.str);
                 std::copy(ptr, ptr + size, b);
                 b += size;
             }
             {
-                std::copy(e.second.len.begin(), e.second.len.end(), b);
-                b += e.second.len.size();
-                auto ptr = get_pointer(e.second.str);
-                auto size = get_size(e.second.str);
+                std::copy(e.val.len.begin(), e.val.len.end(), b);
+                b += e.val.len.size();
+                auto ptr = get_pointer(e.val.str);
+                auto size = get_size(e.val.str);
                 std::copy(ptr, ptr + size, b);
                 b += size;
             }
@@ -208,16 +220,21 @@ public:
             [this] {
                 std::size_t size = 0;
                 for (auto const& e : entries_) {
-                    size += get_size(e.first.str);
-                    size += get_size(e.second.str);
+                    size += get_size(e.key.str);
+                    size += get_size(e.val.str);
                 }
                 return size;
             }();
     }
 
+    void append(string_view key, string_view val) {
+        utf8string_check(key);
+        utf8string_check(val);
+        entries_.emplace_back(len_str(key), len_str(val));
+    }
 private:
     char const id_ = 0x26;
-    std::vector<std::pair<len_str, len_str>> entries_;
+    std::vector<entry> entries_;
 };
 
 } // namespace property

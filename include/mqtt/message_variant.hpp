@@ -4,10 +4,11 @@
 // (See accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
 
-#if !defined(MQTT_VARIANT_MESSAGE_HPP)
-#define MQTT_VARIANT_MESSAGE_HPP
+#if !defined(MQTT_MESSAGE_VARIANT_HPP)
+#define MQTT_MESSAGE_VARIANT_HPP
 
 #include <mqtt/message.hpp>
+#include <mqtt/v5_message.hpp>
 #include <mqtt/variant.hpp>
 
 namespace mqtt {
@@ -15,33 +16,39 @@ namespace mqtt {
 //  message_variant
 
 using message_variant = variant<
-    connect_message,
-    connack_message,
-    publish_message,
-    puback_message,
-    pubrec_message,
-    pubrel_message,
-    pubcomp_message,
-    subscribe_message,
-    suback_message,
-    unsubscribe_message,
-    unsuback_message,
-    pingreq_message,
-    pingresp_message,
-    disconnect_message
+    v3_1_1::connect_message,
+    v3_1_1::connack_message,
+    v3_1_1::publish_message,
+    v3_1_1::puback_message,
+    v3_1_1::pubrec_message,
+    v3_1_1::pubrel_message,
+    v3_1_1::pubcomp_message,
+    v3_1_1::subscribe_message,
+    v3_1_1::suback_message,
+    v3_1_1::unsubscribe_message,
+    v3_1_1::unsuback_message,
+    v3_1_1::pingreq_message,
+    v3_1_1::pingresp_message,
+    v3_1_1::disconnect_message,
+    v5::connect_message,
+    v5::connack_message,
+    v5::publish_message,
+    v5::puback_message,
+    v5::pubrec_message,
+    v5::pubrel_message,
+    v5::pubcomp_message,
+    v5::subscribe_message,
+    v5::suback_message,
+    v5::unsubscribe_message,
+    v5::unsuback_message,
+    v5::pingreq_message,
+    v5::pingresp_message,
+    v5::disconnect_message
 >;
 
+namespace message {
+
 namespace detail {
-
-template <typename T>
-struct is_shared_ptr {
-    static constexpr bool value = false;
-};
-
-template <typename T>
-struct is_shared_ptr<std::shared_ptr<T>> {
-    static constexpr bool value = true;
-};
 
 struct const_buffer_sequence_visitor
 
@@ -84,16 +91,18 @@ struct continuous_buffer_visitor
 
 } // namespace detail
 
+} // namespace message
+
 inline std::vector<as::const_buffer> const_buffer_sequence(message_variant const& mv) {
-    return visit(detail::const_buffer_sequence_visitor(), mv);
+    return visit(message::detail::const_buffer_sequence_visitor(), mv);
 }
 
 inline std::size_t size(message_variant const& mv) {
-    return visit(detail::size_visitor(), mv);
+    return visit(message::detail::size_visitor(), mv);
 }
 
 inline std::string continuous_buffer(message_variant const& mv) {
-    return visit(detail::continuous_buffer_visitor(), mv);
+    return visit(message::detail::continuous_buffer_visitor(), mv);
 }
 
 
@@ -127,4 +136,4 @@ inline message_variant get_message_variant(store_message_variant const& smv) {
 
 } // namespace mqtt
 
-#endif // MQTT_VARIANT_MESSAGE_HPP
+#endif // MQTT_MESSAGE_VARIANT_HPP

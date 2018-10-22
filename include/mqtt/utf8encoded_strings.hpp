@@ -8,6 +8,7 @@
 #define MQTT_UTF8ENCODED_STRINGS_HPP
 
 #include <mqtt/utility.hpp>
+#include <mqtt/exception.hpp>
 
 namespace mqtt {
 
