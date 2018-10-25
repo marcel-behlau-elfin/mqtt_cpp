@@ -63,7 +63,7 @@ struct n_bytes_property {
      */
     template <typename It>
     void fill(It b, It e) const {
-        BOOST_ASSERT(std::distance(b, e) == size());
+        BOOST_ASSERT(static_cast<std::size_t>(std::distance(b, e)) >= size());
         *b++ = id_;
         std::copy(buf_.data(), buf_.data() + buf_.size(), b);
     }
@@ -112,7 +112,7 @@ struct variable_length_property {
      */
     template <typename It>
     void fill(It b, It e) const {
-        BOOST_ASSERT(std::distance(b, e) == size());
+        BOOST_ASSERT(static_cast<std::size_t>(std::distance(b, e)) >= size());
         *b++ = id_;
         std::copy(buf_.data(), buf_.data() + buf_.size(), b);
     }
@@ -186,7 +186,7 @@ public:
 
     template <typename It>
     void fill(It b, It e) const {
-        BOOST_ASSERT(std::distance(b, e) == size());
+        BOOST_ASSERT(static_cast<std::size_t>(std::distance(b, e)) >= size());
 
         *b++ = id_;
         for (auto const& e : entries_) {

@@ -146,7 +146,7 @@ struct puback_message {
                   ps.end(),
                   0,
                   [](std::size_t total, property_variant const& pv) {
-                      total += v5::size(pv);
+                      return total + v5::size(pv);
                   }
               )
           ),
@@ -168,74 +168,31 @@ struct puback_message {
         }
     }
 
-    template <typename Iterator>
-    puback_message(Iterator b, Iterator e) {
-        if (b >= e) throw remaining_length_error();
-        fixed_header_ = *b;
-        auto qos = publish::get_qos(fixed_header_);
-        ++b;
-
-        if (b + 4 >= e) throw remaining_length_error();
-        auto len_consumed = remaining_length(b, b + 4);
-        remaining_length_ = std::get<0>(len_consumed);
-        auto consumed = std::get<1>(len_consumed);
-
-        std::copy(b, b + consumed, std::back_inserter(remaining_length_buf_));
-        b += consumed;
-
-        if (b + 2 >= e) throw remaining_length_error();
-        std::copy(b, b + 2, std::back_inserter(topic_name_length_buf_));
-        auto topic_name_length = make_uint16_t(b, b + 2);
-        b += 2;
-
-        if (b + topic_name_length >= e) throw remaining_length_error();
-        utf8string_check(string_view(&*b, topic_name_length));
-        topic_name_ = as::buffer(&*b, topic_name_length);
-        b += topic_name_length;
-
-        switch (qos) {
-        case qos::at_most_once:
-            break;
-        case qos::at_least_once:
-        case qos::exactly_once:
-            if (b + 2 >= e) throw remaining_length_error();
-            std::copy(b, b + 2, std::back_inserter(packet_id_));
-            b += 2;
-            break;
-        default:
-            throw protocol_error();
-            break;
-        };
-
-        payload_ = as::buffer(&*b, std::distance(b, e));
-    }
-
     /**
      * @brief Create const buffer sequence
      *        it is for boost asio APIs
      * @return const buffer sequence
      */
     std::vector<as::const_buffer> const_buffer_sequence() const {
-        if (packet_id_.empty()) {
-            return
-                {
-                    as::buffer(&fixed_header_, 1),
-                    as::buffer(remaining_length_buf_.data(), remaining_length_buf_.size()),
-                    as::buffer(topic_name_length_buf_.data(), topic_name_length_buf_.size()),
-                    topic_name_,
-                    payload_
-                };
+        if (property_length_ == 0) {
+            return {
+                as::buffer(&fixed_header_, 1),
+                as::buffer(remaining_length_buf_.data(), remaining_length_buf_.size()),
+                as::buffer(&reason_code_, 1),
+            };
         }
         else {
-            return
-                {
-                    as::buffer(&fixed_header_, 1),
-                    as::buffer(remaining_length_buf_.data(), remaining_length_buf_.size()),
-                    as::buffer(topic_name_length_buf_.data(), topic_name_length_buf_.size()),
-                    topic_name_,
-                    as::buffer(packet_id_.data(), packet_id_.size()),
-                    payload_
-                };
+            std::vector<as::const_buffer> bufs {
+                as::buffer(&fixed_header_, 1),
+                as::buffer(remaining_length_buf_.data(), remaining_length_buf_.size()),
+                as::buffer(&reason_code_, 1),
+                as::buffer(property_length_buf_.data(), property_length_buf_.size()),
+            };
+            for (auto const& p : properties_) {
+                auto pbufs = v5::const_buffer_sequence(p);
+                bufs.insert(bufs.end(), pbufs.begin(), pbufs.end());
+            }
+            return bufs;
         }
     }
 
@@ -255,18 +212,21 @@ struct puback_message {
      */
     std::string continuous_buffer() const {
         std::string ret;
-
-        ret.reserve(size());
+        auto sz = size();
+        ret.reserve(sz);
 
         ret.push_back(fixed_header_);
         ret.append(remaining_length_buf_.data(), remaining_length_buf_.size());
 
-        ret.append(topic_name_length_buf_.data(), topic_name_length_buf_.size());
-        ret.append(get_pointer(topic_name_), get_size(topic_name_));
+        ret.push_back(reason_code_);
+        ret.append(property_length_buf_.data(), property_length_buf_.size());
 
-        ret.append(packet_id_.data(), packet_id_.size());
-        ret.append(get_pointer(payload_), get_size(payload_));
-
+        auto it = ret.end();
+        ret.resize(sz);
+        auto end = ret.end();
+        for (auto const& p : properties_) {
+            v5::fill(p, it, end);
+        }
         return ret;
     }
 

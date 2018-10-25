@@ -54,15 +54,15 @@ template <typename Iterator>
 struct fill_visitor
 
 #if !defined(MQTT_STD_VARIANT)
-    : boost::static_visitor<std::string>
+    : boost::static_visitor<void>
 #endif // !defined(MQTT_STD_VARIANT)
 
 {
     fill_visitor(Iterator b, Iterator e):b(b), e(e) {}
 
     template <typename T>
-    std::string operator()(T&& t) {
-        return t.fill(b, e);
+    void operator()(T&& t) const {
+        t.fill(b, e);
     }
 
     Iterator b;
@@ -87,8 +87,9 @@ inline std::size_t size(property_variant const& pv) {
 }
 
 template <typename Iterator>
-inline std::string fill(property_variant& pv, Iterator b, Iterator e) {
-    return visit(property::detail::make_fill_visitor(b, e), pv);
+inline void fill(property_variant const& pv, Iterator b, Iterator e) {
+    auto vis = property::detail::make_fill_visitor(b, e);
+    visit(vis, pv);
 }
 
 } // namespace v5
