@@ -13,11 +13,11 @@ namespace mqtt {
 
 namespace v5 {
 
-namespace proerty {
+namespace property {
 
 namespace id {
 
-constexpr std::uint8_t const packet_format_indicator           =  1;
+constexpr std::uint8_t const payload_format_indicator          =  1;
 constexpr std::uint8_t const message_expiry_interval           =  2;
 constexpr std::uint8_t const content_type                      =  3;
 constexpr std::uint8_t const response_topic                    =  8;

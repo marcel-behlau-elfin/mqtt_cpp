@@ -26,6 +26,7 @@
 #include <mqtt/publish.hpp>
 #include <mqtt/exception.hpp>
 #include <mqtt/string_check.hpp>
+#include <mqtt/property_id.hpp>
 
 namespace mqtt {
 
@@ -39,8 +40,8 @@ namespace detail {
 
 template <std::size_t N>
 struct n_bytes_property {
-    n_bytes_property(char id, char val)
-        :id_(id), buf_(val) {}
+    n_bytes_property(std::uint8_t id, char val)
+        :id_(static_cast<char>(id)), buf_(val) {}
 
     /**
      * @brief Create const buffer sequence
@@ -81,8 +82,8 @@ struct n_bytes_property {
 };
 
 struct variable_length_property {
-    variable_length_property(std::size_t id, std::size_t size)
-        :id_(id) {
+    variable_length_property(std::uint8_t id, std::size_t size)
+        :id_(static_cast<char>(id)) {
         if (size > 0xfffffff) throw variable_length_error();
         while (size > 127) {
             buf_.emplace_back((size & 0b01111111) | 0b10000000);
@@ -134,7 +135,7 @@ struct variable_length_property {
 class payload_format_indicator : public detail::n_bytes_property<1> {
 public:
     payload_format_indicator(bool binary = true)
-        : detail::n_bytes_property<1>(0x01, binary ? 0 : 1) {}
+        : detail::n_bytes_property<1>(id::payload_format_indicator, binary ? 0 : 1) {}
 };
 
 class user_property {
@@ -233,7 +234,7 @@ public:
         entries_.emplace_back(len_str(key), len_str(val));
     }
 private:
-    char const id_ = 0x26;
+    char const id_ = id::user_property;
     std::vector<entry> entries_;
 };
 
