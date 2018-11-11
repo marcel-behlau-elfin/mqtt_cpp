@@ -4786,7 +4786,7 @@ private:
             i += std::get<1>(r);
 
             // read properties
-
+            (void)property_length;
         }
 
         if (remaining_length_ < i + 2) {
