@@ -4762,8 +4762,12 @@ private:
             payload_[i++] != 'M' ||
             payload_[i++] != 'Q' ||
             payload_[i++] != 'T' ||
-            payload_[i++] != 'T' ||
-            payload_[i++] != 0x04) {
+            payload_[i++] != 'T') {
+            if (func) func(boost::system::errc::make_error_code(boost::system::errc::protocol_error));
+            return false;
+        }
+        version_ = payload_[i++];
+        if (version_ != 4 && version_ != 5) {
             if (func) func(boost::system::errc::make_error_code(boost::system::errc::protocol_error));
             return false;
         }
@@ -4772,6 +4776,18 @@ private:
         std::uint16_t keep_alive;
         keep_alive = make_uint16_t(payload_[i], payload_[i + 1]); // index is checked at *1
         i += 2;
+
+        if (version_ == 5) {
+            auto r = variable_length(
+                payload_.begin() + i,
+                std::min(payload_.begin() + i + 4, payload_.end())
+            );
+            auto property_length = std::get<0>(r);
+            i += std::get<1>(r);
+
+            // read properties
+
+        }
 
         if (remaining_length_ < i + 2) {
             if (func) func(boost::system::errc::make_error_code(boost::system::errc::message_size));
@@ -5842,6 +5858,7 @@ private:
     bool disconnect_requested_;
     bool connect_requested_;
     mqtt_message_processed_handler h_mqtt_message_processed_;
+    std::size_t version_;
 };
 
 } // namespace mqtt
