@@ -4785,7 +4785,7 @@ private:
             auto property_length = std::get<0>(r);
             i += std::get<1>(r);
 
-            // read properties
+            // TBD read properties
             (void)property_length;
         }
 

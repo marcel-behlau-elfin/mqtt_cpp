@@ -27,6 +27,7 @@
 #include <mqtt/exception.hpp>
 #include <mqtt/string_check.hpp>
 #include <mqtt/property_id.hpp>
+#include <mqtt/four_byte_util.hpp>
 
 namespace mqtt {
 
@@ -40,8 +41,11 @@ namespace detail {
 
 template <std::size_t N>
 struct n_bytes_property {
-    n_bytes_property(std::uint8_t id, char val)
-        :id_(static_cast<char>(id)), buf_(val) {}
+    template <typename It>
+    n_bytes_property(std::uint8_t id, It b, It e)
+        :id_(static_cast<char>(id)), buf_(b, e) {}
+    n_bytes_property(std::uint8_t id, std::initializer_list<char> il)
+        :id_(static_cast<char>(id)), buf_(std::move(il)) {}
 
     /**
      * @brief Create const buffer sequence
@@ -135,7 +139,13 @@ struct variable_length_property {
 class payload_format_indicator : public detail::n_bytes_property<1> {
 public:
     payload_format_indicator(bool binary = true)
-        : detail::n_bytes_property<1>(id::payload_format_indicator, binary ? 0 : 1) {}
+        : detail::n_bytes_property<1>(id::payload_format_indicator, { binary ? char(0) : char(1) } ) {}
+};
+
+class message_expiry_interval : public detail::n_bytes_property<4> {
+public:
+    message_expiry_interval(std::uint32_t val)
+        : detail::n_bytes_property<4>(id::message_expiry_interval, { MQTT_32BITNUM_TO_BYTE_SEQ(val) } ) {}
 };
 
 class user_property {
