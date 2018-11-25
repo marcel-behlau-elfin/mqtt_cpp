@@ -47,6 +47,7 @@
 #include <mqtt/unique_scope_guard.hpp>
 #include <mqtt/shared_scope_guard.hpp>
 #include <mqtt/message_variant.hpp>
+#include <mqtt/property_parse.hpp>
 
 #if defined(MQTT_USE_WS)
 #include <mqtt/ws_endpoint.hpp>
@@ -4785,8 +4786,14 @@ private:
             auto property_length = std::get<0>(r);
             i += std::get<1>(r);
 
-            // TBD read properties
-            (void)property_length;
+            if (remaining_length_ < i + property_length) {
+                if (func) func(boost::system::errc::make_error_code(boost::system::errc::message_size));
+                return false;
+            }
+
+            char const* it = &payload_[i];
+            char const* end = &payload_[i + property_length];
+            auto props = v5::property::parse(it, end);
         }
 
         if (remaining_length_ < i + 2) {

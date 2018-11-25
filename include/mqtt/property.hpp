@@ -41,6 +41,8 @@ namespace detail {
 
 template <std::size_t N>
 struct n_bytes_property {
+    explicit n_bytes_property(std::uint8_t id)
+        :id_(static_cast<char>(id)) {}
     template <typename It>
     n_bytes_property(std::uint8_t id, It b, It e)
         :id_(static_cast<char>(id)), buf_(b, e) {}
@@ -138,8 +140,31 @@ struct variable_length_property {
 
 class payload_format_indicator : public detail::n_bytes_property<1> {
 public:
+    enum payload_format {
+        binary,
+        string
+    };
+
     payload_format_indicator(bool binary = true)
         : detail::n_bytes_property<1>(id::payload_format_indicator, { binary ? char(0) : char(1) } ) {}
+
+    template <typename It>
+    payload_format_indicator(It& b, It e)
+        : detail::n_bytes_property<1>(id::payload_format_indicator) {
+        if (b == e) throw property_parse_error();
+        if (*b != 0 && *b != 1) throw property_parse_error();
+        buf_[0] = *b;
+        ++b;
+    }
+
+    payload_format payload_format() const {
+        return
+            [this] {
+                if (buf_[0] == 0) return binary;
+                else return string;
+            }();
+    }
+
 };
 
 class message_expiry_interval : public detail::n_bytes_property<4> {

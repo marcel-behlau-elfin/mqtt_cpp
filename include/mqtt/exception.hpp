@@ -98,6 +98,12 @@ struct packet_id_exhausted_error : std::exception {
     }
 };
 
+struct property_parse_error : std::exception {
+    virtual char const* what() const noexcept {
+        return "property parse error";
+    }
+};
+
 } // namespace mqtt
 
 #endif // MQTT_EXCEPTION_HPP
