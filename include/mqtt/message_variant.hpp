@@ -131,7 +131,7 @@ struct message_variant_visitor
 } // detail
 
 inline message_variant get_message_variant(store_message_variant const& smv) {
-    return visit(detail::message_variant_visitor(), smv);
+    return visit(mqtt::detail::message_variant_visitor(), smv);
 }
 
 } // namespace mqtt
