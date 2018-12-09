@@ -4778,6 +4778,7 @@ private:
         keep_alive = make_uint16_t(payload_[i], payload_[i + 1]); // index is checked at *1
         i += 2;
 
+        std::vector<v5::property_variant> props;
         if (version_ == 5) {
             auto r = variable_length(
                 payload_.begin() + i,
@@ -4793,7 +4794,7 @@ private:
 
             char const* it = &payload_[i];
             char const* end = &payload_[i + property_length];
-            auto props = v5::property::parse(it, end);
+            props = v5::property::parse(it, end);
         }
 
         if (remaining_length_ < i + 2) {

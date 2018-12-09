@@ -17,6 +17,7 @@ namespace v5 {
 
 using property_variant = variant<
     property::payload_format_indicator,
+    property::message_expiry_interval,
     property::user_property
 >;
 

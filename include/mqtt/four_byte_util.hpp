@@ -29,7 +29,7 @@ inline void add_uint32_t_to_buf(T& buf, std::uint32_t num) {
 }
 
 template <typename It>
-std::uint16_t make_uint32_t(It b, It e) {
+std::uint32_t make_uint32_t(It b, It e) {
     BOOST_ASSERT(std::distance(b, e) == 4);
     auto b1 = b++;
     auto b2 = b++;

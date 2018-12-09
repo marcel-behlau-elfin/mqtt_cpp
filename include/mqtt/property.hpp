@@ -28,6 +28,7 @@
 #include <mqtt/string_check.hpp>
 #include <mqtt/property_id.hpp>
 #include <mqtt/four_byte_util.hpp>
+#include <mqtt/utf8encoded_strings.hpp>
 
 namespace mqtt {
 
@@ -72,7 +73,7 @@ struct n_bytes_property {
     void fill(It b, It e) const {
         BOOST_ASSERT(static_cast<std::size_t>(std::distance(b, e)) >= size());
         *b++ = id_;
-        std::copy(buf_.data(), buf_.data() + buf_.size(), b);
+        std::copy(buf_.begin(), buf_.end(), b);
     }
 
     /**
@@ -87,16 +88,15 @@ struct n_bytes_property {
     boost::container::static_vector<char, N> buf_;
 };
 
-struct variable_length_property {
-    variable_length_property(std::uint8_t id, std::size_t size)
-        :id_(static_cast<char>(id)) {
-        if (size > 0xfffffff) throw variable_length_error();
-        while (size > 127) {
-            buf_.emplace_back((size & 0b01111111) | 0b10000000);
-            size >>= 7;
-        }
-        buf_.emplace_back(size & 0b01111111);
-    }
+struct string_property {
+    string_property(std::uint8_t id, string_view sv)
+        :id_(static_cast<char>(id)),
+         length_{MQTT_16BITNUM_TO_BYTE_SEQ(sv.size())},
+         buf_(sv.begin(), sv.end()) {
+             if (utf8string::is_valid_length(sv)) throw utf8string_length_error();
+             auto r = utf8string::validate_contents(sv);
+             if (r != utf8string::validation::well_formed) throw utf8string_contents_error(r);
+         }
 
     /**
      * @brief Create const buffer sequence
@@ -107,6 +107,7 @@ struct variable_length_property {
         return
             {
                 as::buffer(&id_, 1),
+                as::buffer(length_.data(), length_.size()),
                 as::buffer(buf_.data(), buf_.size())
             };
     }
@@ -121,7 +122,9 @@ struct variable_length_property {
     void fill(It b, It e) const {
         BOOST_ASSERT(static_cast<std::size_t>(std::distance(b, e)) >= size());
         *b++ = id_;
-        std::copy(buf_.data(), buf_.data() + buf_.size(), b);
+        std::copy(length_.begin(), length_.end(), b);
+        b += length_.size();
+        std::copy(buf_.begin(), buf_.end(), b);
     }
 
     /**
@@ -129,11 +132,64 @@ struct variable_length_property {
      * @return whole size
      */
     std::size_t size() const {
-        return 1 + buf_.size();
+        return 1 + length_.size() + buf_.size();
     }
 
     char const id_;
-    boost::container::static_vector<char, 4> buf_;
+    boost::container::static_vector<char, 2> length_;
+    std::string buf_;
+};
+
+struct string_property_ref {
+    string_property_ref(std::uint8_t id, string_view sv)
+        :id_(static_cast<char>(id)),
+         length_{MQTT_16BITNUM_TO_BYTE_SEQ(sv.size())},
+         buf_(sv.data(), sv.size()) {
+             if (utf8string::is_valid_length(sv)) throw utf8string_length_error();
+             auto r = utf8string::validate_contents(sv);
+             if (r != utf8string::validation::well_formed) throw utf8string_contents_error(r);
+         }
+
+    /**
+     * @brief Create const buffer sequence
+     *        it is for boost asio APIs
+     * @return const buffer sequence
+     */
+    std::vector<as::const_buffer> const_buffer_sequence() const {
+        return
+            {
+                as::buffer(&id_, 1),
+                as::buffer(length_.data(), length_.size()),
+                as::buffer(get_pointer(buf_), get_size(buf_))
+            };
+    }
+
+    /**
+     * @brief Copy the internal information to the range between b and e
+     *        it is for boost asio APIs
+     * @param b begin of the range to fill
+     * @param e end of the range to fill
+     */
+    template <typename It>
+    void fill(It b, It e) const {
+        BOOST_ASSERT(static_cast<std::size_t>(std::distance(b, e)) >= size());
+        *b++ = id_;
+        std::copy(length_.begin(), length_.end(), b);
+        b += length_.size();
+        std::copy(get_pointer(buf_), get_pointer(buf_) + get_size(buf_), b);
+    }
+
+    /**
+     * @brief Get whole size of sequence
+     * @return whole size
+     */
+    std::size_t size() const {
+        return 1 + length_.size() + get_size(buf_);
+    }
+
+    char const id_;
+    boost::container::static_vector<char, 2> length_;
+    as::const_buffer buf_;
 };
 
 } // namespace detail
@@ -171,6 +227,18 @@ class message_expiry_interval : public detail::n_bytes_property<4> {
 public:
     message_expiry_interval(std::uint32_t val)
         : detail::n_bytes_property<4>(id::message_expiry_interval, { MQTT_32BITNUM_TO_BYTE_SEQ(val) } ) {}
+    std::uint32_t val() const {
+        return make_uint32_t(buf_.begin(), buf_.end());
+    }
+};
+
+class content_type : public detail::string_property {
+public:
+    content_type(string_view type)
+        : detail::string_property(id::message_expiry_interval, type) {}
+    std::uint32_t val() const {
+        return make_uint32_t(buf_.begin(), buf_.end());
+    }
 };
 
 class user_property {
@@ -183,18 +251,15 @@ class user_property {
             : len{MQTT_16BITNUM_TO_BYTE_SEQ(get_size(v))}
             , str(v)
         {}
+        std::size_t size() const {
+            return len.size() + get_size(str);
+        }
         boost::container::static_vector<char, 2> len;
         as::const_buffer str;
     };
-    struct entry {
-        explicit entry(len_str&& k, len_str&& v)
-            : key(std::move(k)), val(std::move(v))
-        {}
-        len_str key;
-        len_str val;
-    };
 public:
-    user_property() {}
+    user_property(string_view key, string_view val)
+        : key_(key), val_(val) {}
 
     /**
      * @brief Create const buffer sequence
@@ -204,18 +269,16 @@ public:
     std::vector<as::const_buffer> const_buffer_sequence() const {
         std::vector<as::const_buffer> ret;
         ret.reserve(
-            1 +
-            entries_.size() * 2
+            1 + // header
+            2 + // key (len, str)
+            2   // val (len, str)
         );
 
         ret.emplace_back(as::buffer(&id_, 1));
-
-        for (auto const& e : entries_) {
-            ret.emplace_back(as::buffer(e.key.len.data(), e.key.len.size()));
-            ret.emplace_back(e.key.str);
-            ret.emplace_back(as::buffer(e.val.len.data(), e.val.len.size()));
-            ret.emplace_back(e.val.str);
-        }
+        ret.emplace_back(as::buffer(key_.len.data(), key_.len.size()));
+        ret.emplace_back(key_.str);
+        ret.emplace_back(as::buffer(val_.len.data(), val_.len.size()));
+        ret.emplace_back(val_.str);
 
         return ret;
     }
@@ -225,23 +288,21 @@ public:
         BOOST_ASSERT(static_cast<std::size_t>(std::distance(b, e)) >= size());
 
         *b++ = id_;
-        for (auto const& e : entries_) {
-            {
-                std::copy(e.key.len.begin(), e.key.len.end(), b);
-                b += e.key.len.size();
-                auto ptr = get_pointer(e.key.str);
-                auto size = get_size(e.key.str);
-                std::copy(ptr, ptr + size, b);
-                b += size;
-            }
-            {
-                std::copy(e.val.len.begin(), e.val.len.end(), b);
-                b += e.val.len.size();
-                auto ptr = get_pointer(e.val.str);
-                auto size = get_size(e.val.str);
-                std::copy(ptr, ptr + size, b);
-                b += size;
-            }
+        {
+            std::copy(key_.len.begin(), key_.len.end(), b);
+            b += key_.len.size();
+            auto ptr = get_pointer(key_.str);
+            auto size = get_size(key_.str);
+            std::copy(ptr, ptr + size, b);
+            b += size;
+        }
+        {
+            std::copy(val_.len.begin(), val_.len.end(), b);
+            b += val_.len.size();
+            auto ptr = get_pointer(val_.str);
+            auto size = get_size(val_.str);
+            std::copy(ptr, ptr + size, b);
+            b += size;
         }
     }
 
@@ -252,25 +313,14 @@ public:
     std::size_t size() const {
         return
             1 + // id_
-            entries_.size() * 2 * 2 + // pair of 2 bytes(size)
-            [this] {
-                std::size_t size = 0;
-                for (auto const& e : entries_) {
-                    size += get_size(e.key.str);
-                    size += get_size(e.val.str);
-                }
-                return size;
-            }();
+            key_.size() +
+            val_.size();
     }
 
-    void append(string_view key, string_view val) {
-        utf8string_check(key);
-        utf8string_check(val);
-        entries_.emplace_back(len_str(key), len_str(val));
-    }
 private:
     char const id_ = id::user_property;
-    std::vector<entry> entries_;
+    len_str key_;
+    len_str val_;
 };
 
 } // namespace property
