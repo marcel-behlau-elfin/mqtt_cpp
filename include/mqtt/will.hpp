@@ -40,28 +40,28 @@ public:
          props_(force_move(props))
     {}
 
-    constexpr buffer const& topic() const {
+    buffer const& topic() const {
         return topic_;
     }
-    constexpr buffer& topic() {
+    buffer& topic() {
         return topic_;
     }
-    constexpr buffer const& message() const {
+    buffer const& message() const {
         return message_;
     }
-    constexpr buffer& message() {
+    buffer& message() {
         return message_;
     }
-    constexpr retain get_retain() const {
+    retain get_retain() const {
         return pubopts_.get_retain();
     }
-    constexpr qos get_qos() const {
+    qos get_qos() const {
         return pubopts_.get_qos();
     }
-    constexpr v5::properties const& props() const {
+    v5::properties const& props() const {
         return props_;
     }
-    constexpr v5::properties& props() {
+    v5::properties& props() {
         return props_;
     }
 

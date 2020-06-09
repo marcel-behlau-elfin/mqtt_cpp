@@ -156,7 +156,7 @@ struct binary_property {
         return 2;
     }
 
-    constexpr buffer const& val() const {
+    buffer const& val() const {
         return buf_;
     }
 
@@ -221,7 +221,7 @@ struct variable_property {
         return 2;
     }
 
-    constexpr std::size_t val() const {
+    std::size_t val() const {
         return std::get<0>(variable_length(value_));
     }
 
@@ -569,11 +569,11 @@ public:
             2;  // val (len, buf)
     }
 
-    constexpr buffer const& key() const {
+    buffer const& key() const {
         return key_.buf;
     }
 
-    constexpr buffer const& val() const {
+    buffer const& val() const {
         return val_.buf;
     }
 

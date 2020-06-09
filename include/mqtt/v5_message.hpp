@@ -306,7 +306,7 @@ public:
      * @brief Get number of element of const_buffer_sequence
      * @return number of element of const_buffer_sequence
      */
-    constexpr std::size_t num_of_const_buffer_sequence() const {
+    std::size_t num_of_const_buffer_sequence() const {
         return num_of_const_buffer_sequence_;
     }
 
@@ -492,7 +492,7 @@ public:
      * @brief Get number of element of const_buffer_sequence
      * @return number of element of const_buffer_sequence
      */
-    constexpr std::size_t num_of_const_buffer_sequence() const {
+    std::size_t num_of_const_buffer_sequence() const {
         return num_of_const_buffer_sequence_;
     }
 
@@ -2558,7 +2558,7 @@ struct disconnect_message {
      * @brief Get number of element of const_buffer_sequence
      * @return number of element of const_buffer_sequence
      */
-    constexpr std::size_t num_of_const_buffer_sequence() const {
+    std::size_t num_of_const_buffer_sequence() const {
         return num_of_const_buffer_sequence_;
     }
 
@@ -2728,7 +2728,7 @@ struct auth_message {
      * @brief Get number of element of const_buffer_sequence
      * @return number of element of const_buffer_sequence
      */
-    constexpr std::size_t num_of_const_buffer_sequence() const {
+    std::size_t num_of_const_buffer_sequence() const {
         return num_of_const_buffer_sequence_;
     }
 
