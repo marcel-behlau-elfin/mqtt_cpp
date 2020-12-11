@@ -971,6 +971,20 @@ public:
 
 
     /**
+     * @brief send_ping_req
+     * Send a ping regarding of the configuration. Will be called from ping req timer.
+     * If the user want to implement a ping req stragy, this method must be called to send a ping<BR>
+     */
+    void send_ping_req() {
+        if (async_pingreq_) {
+            base::async_pingreq();
+        }
+        else {
+            base::pingreq();
+        }
+    }
+
+    /**
      * @brief Set pingreq message sending mode
      * @param b If true then send pingreq asynchronously, otherwise send synchronously.
      */
@@ -1352,12 +1366,7 @@ protected:
 private:
     void handle_timer(error_code ec) {
         if (!ec) {
-            if (async_pingreq_) {
-                base::async_pingreq();
-            }
-            else {
-                base::pingreq();
-            }
+            send_ping_req();
         }
     }
 
